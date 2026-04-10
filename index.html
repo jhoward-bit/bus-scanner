@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bus Scanner System</title>
   <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
-
   <style>
     body {
       font-family: sans-serif;
@@ -51,14 +50,27 @@
       margin: 0 auto;
       border: 5px solid #333;
       background: #000;
+      position: relative;
       min-height: 260px;
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
     }
 
     video {
       width: 100%;
+      height: auto;
+      display: block;
+      background: #000;
+    }
+
+    #scanResult {
+      padding: 20px;
+      border-radius: 10px;
+      margin-top: 15px;
+      font-weight: bold;
+      font-size: 1.2em;
     }
 
     .hidden { display: none !important; }
@@ -66,153 +78,573 @@
     .safe {
       background-color: #d1e7dd;
       color: #0f5132;
-      padding: 20px;
-      margin-top: 10px;
-      border-radius: 10px;
+      border: 2px solid #badbcc;
     }
 
     .warn {
       background-color: #fff3cd;
       color: #664d03;
-      padding: 20px;
-      margin-top: 10px;
-      border-radius: 10px;
+      border: 2px solid #ffecb5;
     }
 
-    ul { list-style: none; padding: 0; }
+    #officeList, #driverList {
+      list-style: none;
+      padding: 0;
+      max-width: 600px;
+      margin: 0 auto;
+      text-align: left;
+    }
+
+    .passenger-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px;
+      border-bottom: 1px solid #ddd;
+      background: white;
+    }
+
+    .passenger-row:nth-child(even) {
+      background: #f9f9f9;
+    }
+
+    .mini-btn {
+      padding: 8px 15px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      margin-left: 10px;
+      color: white;
+    }
+
+    .scanner-status {
+      color: white;
+      font-size: 14px;
+      padding: 10px;
+    }
   </style>
 </head>
-
 <body>
 
-<h3>🚌 Bus Scanner</h3>
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:0 10px;">
+    <h3>🚌 Bus System</h3>
+    <button class="btn btn-grey" onclick="toggleOfficeMode()">Admin/Office View</button>
+  </div>
 
-<select id="mainBusSelect">
-  <option value="" disabled selected>Select Bus</option>
-  <option>Bus 7</option>
-  <option>Bus 9</option>
-  <option>Bus 11</option>
-  <option>Bus 13</option>
-  <option>Bus 14</option>
-  <option>Bus 15</option>
-  <option>Bus 18</option>
-  <option>Bus 21</option>
-  <option>Bus 22</option>
-  <option>Bus 30</option>
-  <option>Bus 31</option>
-  <option>Bus 32</option>
-  <option>Bus 33</option>
-  <option>Bus 34</option>
-  <option>Bus 35</option>
-  <option>Bus 36</option>
-  <option>Bus 37</option>
-  <option>Bus 38</option>
-  <option>Bus 39</option>
-  <option>Bus 40</option>
-  <option>Bus 44</option>
-  <option>Bus 45</option>
-</select>
+  <div id="view-scanner">
+    <select id="mainBusSelect">
+      <option value="" disabled selected>Select Bus Number</option>
+      <option value="Bus 7">Bus 7</option>
+      <option value="Bus 9">Bus 9</option>
+      <option value="Bus 11">Bus 11</option>
+      <option value="Bus 13">Bus 13</option>
+      <option value="Bus 14">Bus 14</option>
+      <option value="Bus 15">Bus 15</option>
+      <option value="Bus 18">Bus 18</option>
+      <option value="Bus 21">Bus 21</option>
+      <option value="Bus 22">Bus 22</option>
+      <option value="Bus 30">Bus 30</option>
+      <option value="Bus 31">Bus 31</option>
+      <option value="Bus 32">Bus 32</option>
+      <option value="Bus 33">Bus 33</option>
+      <option value="Bus 34">Bus 34</option>
+      <option value="Bus 35">Bus 35</option>
+      <option value="Bus 36">Bus 36</option>
+      <option value="Bus 37">Bus 37</option>
+      <option value="Bus 38">Bus 38</option>
+      <option value="Bus 39">Bus 39</option>
+      <option value="Bus 40">Bus 40</option>
+      <option value="Bus 44">Bus 44</option>
+      <option value="Bus 45">Bus 45</option>
+    </select>
 
-<div id="reader">
-  <video id="video" playsinline autoplay muted></video>
-</div>
+    <div id="reader">
+      <video id="video" playsinline autoplay muted></video>
+      <div id="scannerMessage" class="scanner-status hidden"></div>
+    </div>
 
-<!-- ✅ FIXED INPUT -->
-<input type="text" id="manualInput" inputmode="numeric" placeholder="Enter Student ID">
+    <div style="margin-top: 10px; display: flex; justify-content: center; gap: 10px;">
+      <input type="text" id="manualInput" inputmode="numeric" placeholder="Type ID..." style="padding: 12px; font-size: 18px;">
+      <button class="btn btn-blue" onclick="manualCheckIn()" style="margin: 5px 0;">Check In</button>
+    </div>
 
-<button class="btn btn-blue" onclick="manualCheckIn()">Manual Check In</button>
+    <div id="scanResult" class="hidden"></div>
 
-<div id="scanResult" class="hidden"></div>
+    <br>
+    <button class="btn btn-green" onclick="loadManifest('modal')">📋 View Passengers</button>
+    <button class="btn btn-red" onclick="switchView('report')">⚠️ Report Issue</button>
+  </div>
 
-<script>
-const API_BASE = "https://script.google.com/a/macros/usd250.org/s/AKfycbyeFcSxiMhYyOHDHaMKfQCYKJBDfUGT8ulGOM2fX-UwK3Uzz1MAgmRxwXPw_UXH8ylW/exec";
+  <div id="view-office" class="hidden">
+    <h2>🏢 Office Dashboard</h2>
+    <p>Select a bus to view today's passengers and log issues.</p>
 
-let codeReader = new ZXing.BrowserQRCodeReader();
-let scanning = false;
+    <select id="officeBusSelect" onchange="refreshOfficeView()">
+      <option value="" disabled selected>Select Bus to View...</option>
+      <option value="Bus 7">Bus 7</option>
+      <option value="Bus 9">Bus 9</option>
+      <option value="Bus 11">Bus 11</option>
+      <option value="Bus 13">Bus 13</option>
+      <option value="Bus 14">Bus 14</option>
+      <option value="Bus 15">Bus 15</option>
+      <option value="Bus 18">Bus 18</option>
+      <option value="Bus 21">Bus 21</option>
+      <option value="Bus 22">Bus 22</option>
+      <option value="Bus 30">Bus 30</option>
+      <option value="Bus 31">Bus 31</option>
+      <option value="Bus 32">Bus 32</option>
+      <option value="Bus 33">Bus 33</option>
+      <option value="Bus 34">Bus 34</option>
+      <option value="Bus 35">Bus 35</option>
+      <option value="Bus 36">Bus 36</option>
+      <option value="Bus 37">Bus 37</option>
+      <option value="Bus 38">Bus 38</option>
+      <option value="Bus 39">Bus 39</option>
+      <option value="Bus 40">Bus 40</option>
+      <option value="Bus 44">Bus 44</option>
+      <option value="Bus 45">Bus 45</option>
+    </select>
 
-window.onload = startCamera;
+    <h3 id="officeCount">Waiting for selection...</h3>
+    <ul id="officeList"></ul>
+  </div>
 
-async function startCamera() {
-  try {
-    const devices = await ZXing.BrowserQRCodeReader.listVideoInputDevices();
-    const selectedDeviceId = devices[0].deviceId;
+  <div id="view-report" class="hidden">
+    <h2>⚠️ Incident Report</h2>
+    <form id="incidentForm" onsubmit="return false;">
+      <input type="hidden" id="reportBusNum" name="busNumber">
+      <input type="hidden" id="reporterRole" name="reportedBy" value="Driver">
 
-    scanning = true;
+      <select id="studentSelect" name="studentId" required>
+        <option value="">Loading Roster...</option>
+      </select>
 
-    codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result) => {
-      if (result && scanning) {
-        scanning = false;
-        onScanSuccess(result.getText());
-        setTimeout(() => scanning = true, 2000);
+      <select name="issueType" id="issueType" required>
+        <option value="" disabled selected>Type of Issue...</option>
+        <option value="Fighting">Fighting</option>
+        <option value="Bullying">Bullying</option>
+        <option value="Language">Inappropriate Language</option>
+        <option value="Vandalism">Vandalism</option>
+        <option value="Refusal">Refusal to Sit</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <textarea name="notes" id="notes" rows="4" placeholder="Details..."></textarea>
+
+      <button type="button" class="btn btn-red" onclick="sendReport()">Submit Report</button>
+      <button type="button" class="btn btn-blue" onclick="closeReport()">Cancel</button>
+    </form>
+  </div>
+
+  <div id="manifestModal" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1000;">
+    <div style="background:white; margin:10% auto; padding:20px; width:90%; border-radius:10px; max-height:80vh; overflow-y:auto;">
+      <h3>Current Passengers</h3>
+      <ul id="driverList"></ul>
+      <button class="btn btn-blue" onclick="document.getElementById('manifestModal').classList.add('hidden')">Close</button>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "https://script.google.com/a/macros/usd250.org/s/AKfycbyJKmT99iyS1YIBzpktFnWm0HSD-ja9EV2wSmZwyxbJSzqvHxHM9V1Vrtvx8A_kNa76/exec";
+
+    let codeReader = null;
+    let scanning = false;
+    let currentMode = "driver";
+    let scannerRestartTimeout = null;
+    let activeStream = null;
+
+    window.onload = function() {
+      const savedBus = localStorage.getItem("myBusNumber");
+      if (savedBus) {
+        document.getElementById("mainBusSelect").value = savedBus;
       }
-    });
 
-  } catch (err) {
-    alert("Camera failed: " + err.message);
-  }
-}
+      document.getElementById("mainBusSelect").addEventListener("change", function() {
+        localStorage.setItem("myBusNumber", this.value);
+      });
 
-function manualCheckIn() {
-  const id = document.getElementById('manualInput').value.trim();
-  onScanSuccess(id);
-}
-
-function apiGet(params) {
-  return new Promise((resolve) => {
-    const callbackName = "cb" + Date.now();
-
-    window[callbackName] = function(data) {
-      resolve(data);
-      delete window[callbackName];
+      setTimeout(() => {
+        startCamera();
+      }, 400);
     };
 
-    const query = new URLSearchParams({
-      ...params,
-      api: 1,
-      callback: callbackName
-    });
-
-    const script = document.createElement("script");
-    script.src = API_BASE + "?" + query;
-    document.body.appendChild(script);
-  });
-}
-
-async function onScanSuccess(id) {
-  const bus = document.getElementById('mainBusSelect').value;
-
-  if (!bus) {
-    alert("Select a bus first");
-    return;
-  }
-
-  const res = await apiGet({
-    action: "scan",
-    studentId: id,
-    busNumber: bus
-  });
-
-  const box = document.getElementById('scanResult');
-  box.classList.remove("hidden");
-
-  if (res.status === "error") {
-    box.className = "warn";
-    box.innerHTML = "❌ ID NOT FOUND";
-  } else {
-    if (res.wrongBus) {
-      box.className = "warn";
-      box.innerHTML = "⚠️ WRONG BUS<br>" + res.name;
-    } else {
-      box.className = "safe";
-      box.innerHTML = "✅ CHECKED IN<br>" + res.name;
+    function showScannerMessage(msg) {
+      const el = document.getElementById('scannerMessage');
+      el.innerText = msg;
+      el.classList.remove('hidden');
     }
-  }
 
-  setTimeout(() => {
-    box.classList.add("hidden");
-  }, 2500);
-}
-</script>
+    function hideScannerMessage() {
+      document.getElementById('scannerMessage').classList.add('hidden');
+    }
 
+    function apiGet(params) {
+      return new Promise((resolve, reject) => {
+        const callbackName = "jsonp_cb_" + Date.now() + "_" + Math.floor(Math.random() * 100000);
+
+        params.api = "1";
+        params.callback = callbackName;
+
+        const query = new URLSearchParams(params).toString();
+        const script = document.createElement("script");
+        script.src = `${API_BASE}?${query}`;
+
+        let finished = false;
+
+        window[callbackName] = function(data) {
+          finished = true;
+          resolve(data);
+          cleanup();
+        };
+
+        script.onerror = function() {
+          if (!finished) reject(new Error("API request failed"));
+          cleanup();
+        };
+
+        function cleanup() {
+          try { delete window[callbackName]; } catch (e) {}
+          if (script.parentNode) script.parentNode.removeChild(script);
+        }
+
+        document.body.appendChild(script);
+
+        setTimeout(() => {
+          if (!finished) {
+            reject(new Error("API timeout"));
+            cleanup();
+          }
+        }, 10000);
+      });
+    }
+
+    async function startCamera() {
+      const videoEl = document.getElementById('video');
+
+      try {
+        hideScannerMessage();
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          showScannerMessage("This browser does not support camera access.");
+          return;
+        }
+
+        if (typeof ZXing === "undefined" || !ZXing.BrowserQRCodeReader) {
+          showScannerMessage("Scanner library failed to load.");
+          return;
+        }
+
+        stopCamera();
+
+        activeStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+
+        videoEl.srcObject = activeStream;
+        await videoEl.play().catch(() => {});
+
+        codeReader = new ZXing.BrowserQRCodeReader();
+        scanning = true;
+
+        codeReader.decodeFromVideoDevice(undefined, videoEl, (result, err) => {
+          if (result && scanning) {
+            scanning = false;
+            onScanSuccess(result.getText(), true);
+
+            if (scannerRestartTimeout) clearTimeout(scannerRestartTimeout);
+            scannerRestartTimeout = setTimeout(() => {
+              scanning = true;
+            }, 2500);
+          }
+        });
+
+      } catch (error) {
+        console.error("Camera start error:", error);
+
+        let msg = "Camera failed to start.";
+
+        if (error && error.name === "NotAllowedError") {
+          msg = "Camera permission denied.";
+        } else if (error && error.name === "NotFoundError") {
+          msg = "No camera found.";
+        } else if (error && error.name === "NotReadableError") {
+          msg = "Camera already in use by another app or tab.";
+        } else if (error && error.message) {
+          msg = "Camera failed: " + error.message;
+        }
+
+        showScannerMessage(msg);
+      }
+    }
+
+    function stopCamera() {
+      try {
+        if (codeReader) {
+          codeReader.reset();
+          codeReader = null;
+        }
+      } catch (e) {
+        console.error("Camera stop error:", e);
+      }
+
+      if (activeStream) {
+        try {
+          activeStream.getTracks().forEach(track => track.stop());
+        } catch (e) {}
+        activeStream = null;
+      }
+
+      scanning = false;
+    }
+
+    function manualCheckIn() {
+      const input = document.getElementById('manualInput');
+      const sId = input.value.trim();
+      const bus = document.getElementById('mainBusSelect').value;
+
+      if (!bus) {
+        alert("Select a bus first!");
+        return;
+      }
+
+      if (!sId) {
+        alert("Enter an ID!");
+        return;
+      }
+
+      onScanSuccess(sId, false);
+      input.value = "";
+    }
+
+    async function onScanSuccess(decodedText, fromScan) {
+      const busNum = document.getElementById('mainBusSelect').value;
+      if (!busNum) {
+        alert("Select a bus first!");
+        return;
+      }
+
+      const box = document.getElementById('scanResult');
+      box.className = "hidden";
+      box.innerHTML = "";
+
+      try {
+        const data = await apiGet({
+          action: "scan",
+          studentId: decodedText,
+          busNumber: busNum
+        });
+
+        box.classList.remove("hidden");
+
+        if (data.status === 'error') {
+          box.className = "warn";
+          box.innerHTML = "❌ ID NOT FOUND";
+        } else {
+          if (data.wrongBus) {
+            box.className = "warn";
+            box.innerHTML = `⚠️ WRONG BUS<br>${data.name}`;
+          } else {
+            box.className = "safe";
+            box.innerHTML = `✅ CHECKED IN<br>${data.name}`;
+          }
+        }
+
+        setTimeout(() => {
+          box.className = "hidden";
+          box.innerHTML = "";
+        }, 2500);
+
+      } catch (err) {
+        console.error(err);
+        box.classList.remove("hidden");
+        box.className = "warn";
+        box.innerHTML = "❌ Scan failed.";
+      }
+    }
+
+    function toggleOfficeMode() {
+      if (currentMode === "driver") {
+        currentMode = "office";
+        document.getElementById('view-scanner').classList.add('hidden');
+        document.getElementById('view-office').classList.remove('hidden');
+        document.getElementById('reporterRole').value = "Office Admin";
+        stopCamera();
+      } else {
+        currentMode = "driver";
+        document.getElementById('view-office').classList.add('hidden');
+        document.getElementById('view-scanner').classList.remove('hidden');
+        document.getElementById('reporterRole').value = "Driver";
+        startCamera();
+      }
+    }
+
+    async function refreshOfficeView() {
+      const busNum = document.getElementById('officeBusSelect').value;
+      const list = document.getElementById('officeList');
+      document.getElementById('officeCount').innerText = "Loading...";
+      list.innerHTML = "";
+
+      try {
+        const names = await apiGet({
+          action: "manifest",
+          busNumber: busNum
+        });
+
+        document.getElementById('officeCount').innerText = `${busNum}: ${names.length} Students Checked In Today`;
+
+        names.forEach(student => {
+          let li = document.createElement("li");
+          li.className = "passenger-row";
+          li.innerHTML = `
+            <span>${student.name}</span>
+            <button class="mini-btn btn-red" onclick="openReport('${student.id}', '${busNum}')">⚠️ Report</button>
+          `;
+          list.appendChild(li);
+        });
+
+      } catch (err) {
+        console.error(err);
+        document.getElementById('officeCount').innerText = "Failed to load.";
+      }
+    }
+
+    async function loadManifest(target) {
+      const busNum = document.getElementById('mainBusSelect').value;
+      if (!busNum) {
+        alert("Select a bus first!");
+        return;
+      }
+
+      const listId = (target === 'modal') ? 'driverList' : 'officeList';
+      const list = document.getElementById(listId);
+      list.innerHTML = "<li>Loading...</li>";
+
+      if (target === 'modal') {
+        document.getElementById('manifestModal').classList.remove('hidden');
+      }
+
+      try {
+        const names = await apiGet({
+          action: "manifest",
+          busNumber: busNum
+        });
+
+        list.innerHTML = "";
+        if (names.length === 0) {
+          list.innerHTML = "<li>No check-ins today.</li>";
+        }
+
+        names.forEach(student => {
+          let li = document.createElement("li");
+          li.className = "passenger-row";
+          li.innerHTML = `
+            <span>${student.name}</span>
+            <button class="mini-btn btn-red" onclick="openReport('${student.id}', '${busNum}')">⚠️</button>
+          `;
+          list.appendChild(li);
+        });
+
+      } catch (err) {
+        console.error(err);
+        list.innerHTML = "<li>Failed to load passengers.</li>";
+      }
+    }
+
+    function switchView(view) {
+      if (view === 'report') {
+        openReport(null, document.getElementById('mainBusSelect').value);
+      }
+    }
+
+    async function openReport(studentId, busNum) {
+      if (!busNum) {
+        alert("Select a bus!");
+        return;
+      }
+
+      document.getElementById('view-scanner').classList.add('hidden');
+      document.getElementById('view-office').classList.add('hidden');
+      document.getElementById('manifestModal').classList.add('hidden');
+      document.getElementById('view-report').classList.remove('hidden');
+
+      document.getElementById('reportBusNum').value = busNum;
+
+      try {
+        const roster = await apiGet({
+          action: "roster",
+          busNumber: busNum
+        });
+
+        const select = document.getElementById('studentSelect');
+        select.innerHTML = '<option value="" disabled selected>Select Student</option>';
+
+        roster.forEach(s => {
+          let opt = document.createElement('option');
+          opt.value = s.id;
+          opt.innerText = s.name;
+          if (String(s.id) === String(studentId)) opt.selected = true;
+          select.appendChild(opt);
+        });
+
+      } catch (err) {
+        console.error(err);
+        alert("Failed to load roster.");
+      }
+    }
+
+    function closeReport() {
+      document.getElementById('view-report').classList.add('hidden');
+
+      if (currentMode === "office") {
+        document.getElementById('view-office').classList.remove('hidden');
+      } else {
+        document.getElementById('view-scanner').classList.remove('hidden');
+      }
+    }
+
+    async function sendReport() {
+      const btn = document.querySelector('#view-report .btn-red');
+      btn.innerText = "Sending...";
+      btn.disabled = true;
+
+      const formObj = {
+        busNumber: document.getElementById('reportBusNum').value,
+        reportedBy: document.getElementById('reporterRole').value,
+        studentId: document.getElementById('studentSelect').value,
+        issueType: document.getElementById('issueType').value,
+        notes: document.getElementById('notes').value
+      };
+
+      try {
+        const result = await apiGet({
+          action: "incident",
+          busNumber: formObj.busNumber,
+          reportedBy: formObj.reportedBy,
+          studentId: formObj.studentId,
+          issueType: formObj.issueType,
+          notes: formObj.notes
+        });
+
+        if (result.status === "error") {
+          throw new Error(result.message || "Failed");
+        }
+
+        alert(result.message);
+        document.getElementById('incidentForm').reset();
+        document.getElementById('reporterRole').value = (currentMode === "office") ? "Office Admin" : "Driver";
+        btn.innerText = "Submit Report";
+        btn.disabled = false;
+        closeReport();
+
+      } catch (err) {
+        console.error(err);
+        alert("Failed to submit report.");
+        btn.innerText = "Submit Report";
+        btn.disabled = false;
+      }
+    }
+  </script>
 </body>
 </html>

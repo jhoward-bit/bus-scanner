@@ -287,8 +287,6 @@
         params.callback = callbackName;
 
         const query = new URLSearchParams(params).toString();
-        const script = document.createElement("script");
-        script.src = `${API_BASE}?${query}`;
 
         let finished = false;
 
@@ -298,17 +296,21 @@
           cleanup();
         };
 
-        script.onerror = function() {
+        const iframe = document.createElement("iframe");
+        iframe.style.display = "none";
+        iframe.src = `${API_BASE}?${query}`;
+
+        iframe.onerror = function() {
           if (!finished) reject(new Error("API request failed"));
           cleanup();
         };
 
         function cleanup() {
-          try { delete window[callbackName]; } catch (e) {}
-          if (script.parentNode) script.parentNode.removeChild(script);
+          try { delete window[callbackName]; } catch(e) {}
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
         }
 
-        document.body.appendChild(script);
+        document.body.appendChild(iframe);
 
         setTimeout(() => {
           if (!finished) {

@@ -318,6 +318,30 @@
       });
     }
 
+    // Native browser audio synthesizer function
+    function playBeep() {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        const audioCtx = new AudioContext();
+        
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(800, audioCtx.currentTime); // 800Hz tone
+        gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);       // Vol setting
+        
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.12); // Beep duration 120ms
+      } catch (e) {
+        console.error("Audio beep failed:", e);
+      }
+    }
+
     async function startCamera() {
       const videoEl = document.getElementById('video');
 
@@ -329,7 +353,8 @@
           return;
         }
 
-        if (typeof ZXing === "undefined" || !ZXing.BrowserQRCodeReader) {
+        // Updated safety check for MultiFormatReader
+        if (typeof ZXing === "undefined" || !ZXing.BrowserMultiFormatReader) {
           showScannerMessage("Scanner library failed to load.");
           return;
         }
@@ -344,7 +369,8 @@
         videoEl.srcObject = activeStream;
         await videoEl.play().catch(() => {});
 
-        codeReader = new ZXing.BrowserQRCodeReader();
+        // Changed from BrowserQRCodeReader to BrowserMultiFormatReader to read barcodes
+        codeReader = new ZXing.BrowserMultiFormatReader();
         scanning = true;
 
         codeReader.decodeFromVideoDevice(undefined, videoEl, (result, err) => {
@@ -418,6 +444,11 @@
     }
 
     async function onScanSuccess(decodedText, fromScan) {
+      // Play confirmation tone instantly if scanned via camera
+      if (fromScan) {
+        playBeep();
+      }
+
       const busNum = document.getElementById('mainBusSelect').value;
       if (!busNum) {
         alert("Select a bus first!");
